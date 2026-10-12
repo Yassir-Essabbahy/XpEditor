@@ -480,6 +480,110 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
         </div>
       </div>
 
+      {/* Entrance & Exit Animations (fade, slides, zoom, pop) */}
+      {selectedElement.type !== 'audio' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Sparkles size={12} /> Entrance & Exit
+          </span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px', gap: '8px', alignItems: 'end' }}>
+            <div>
+              <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Entrance</label>
+              <select
+                className="editor-select"
+                style={{ width: '100%' }}
+                value={(selectedElement as any).entranceAnimation || 'none'}
+                onChange={(e) => onUpdateElement(selectedElement.id, { entranceAnimation: e.target.value as any } as any)}
+              >
+                <option value="none">None</option>
+                <option value="fade">Fade In</option>
+                <option value="slide-left">Slide In (from Right)</option>
+                <option value="slide-right">Slide In (from Left)</option>
+                <option value="slide-up">Slide In (from Below)</option>
+                <option value="slide-down">Slide In (from Above)</option>
+                <option value="zoom-in">Zoom In</option>
+                <option value="pop-in">Pop In (Overshoot)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Secs</label>
+              <input
+                type="number"
+                className="editor-select"
+                style={{ width: '100%' }}
+                min="0"
+                max="10"
+                step="0.1"
+                value={(selectedElement as any).entranceDuration ?? 0.5}
+                onChange={(e) => onUpdateElement(selectedElement.id, { entranceDuration: Math.max(0, Number(e.target.value) || 0) } as any)}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px', gap: '8px', alignItems: 'end' }}>
+            <div>
+              <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Exit</label>
+              <select
+                className="editor-select"
+                style={{ width: '100%' }}
+                value={(selectedElement as any).exitAnimation || 'none'}
+                onChange={(e) => onUpdateElement(selectedElement.id, { exitAnimation: e.target.value as any } as any)}
+              >
+                <option value="none">None</option>
+                <option value="fade">Fade Out</option>
+                <option value="slide-left">Slide Out (to Left)</option>
+                <option value="slide-right">Slide Out (to Right)</option>
+                <option value="slide-up">Slide Out (Up)</option>
+                <option value="slide-down">Slide Out (Down)</option>
+                <option value="zoom-in">Zoom Out</option>
+                <option value="pop-in">Pop Out</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Secs</label>
+              <input
+                type="number"
+                className="editor-select"
+                style={{ width: '100%' }}
+                min="0"
+                max="10"
+                step="0.1"
+                value={(selectedElement as any).exitDuration ?? 0.5}
+                onChange={(e) => onUpdateElement(selectedElement.id, { exitDuration: Math.max(0, Number(e.target.value) || 0) } as any)}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              type="button"
+              className="editor-btn"
+              style={{ flex: 1, fontSize: '10px', padding: '3px 4px', justifyContent: 'center' }}
+              title="Fade in 0.5s + fade out 0.5s"
+              onClick={() => onUpdateElement(selectedElement.id, { entranceAnimation: 'fade', entranceDuration: 0.5, exitAnimation: 'fade', exitDuration: 0.5 } as any)}
+            >
+              Fade In/Out
+            </button>
+            <button
+              type="button"
+              className="editor-btn"
+              style={{ flex: 1, fontSize: '10px', padding: '3px 4px', justifyContent: 'center' }}
+              title="Pop entrance + fade exit"
+              onClick={() => onUpdateElement(selectedElement.id, { entranceAnimation: 'pop-in', entranceDuration: 0.4, exitAnimation: 'fade', exitDuration: 0.4 } as any)}
+            >
+              Pop + Fade
+            </button>
+            <button
+              type="button"
+              className="editor-btn"
+              style={{ flex: 1, fontSize: '10px', padding: '3px 4px', justifyContent: 'center' }}
+              title="Remove entrance and exit animations"
+              onClick={() => onUpdateElement(selectedElement.id, { entranceAnimation: 'none', exitAnimation: 'none' } as any)}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Keyframe Animation Overview Panel */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -550,6 +654,8 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               }}
             >
               <option value="linear">Linear (Standard)</option>
+              <option value="ease-in">Ease In (Slow Start)</option>
+              <option value="ease-out">Ease Out (Gentle Landing)</option>
               <option value="ease-in-out">Ease In / Out (Smooth)</option>
             </select>
           </div>

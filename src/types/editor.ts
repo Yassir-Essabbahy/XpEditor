@@ -12,7 +12,17 @@ export type ElementType =
   | 'assistant';
 
 export type KeyframeProperty = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'opacity' | 'volume';
-export type KeyframeEasing = 'linear' | 'ease-in-out';
+export type KeyframeEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+
+export type EntranceAnimation =
+  | 'none'
+  | 'fade'
+  | 'slide-left'
+  | 'slide-right'
+  | 'slide-up'
+  | 'slide-down'
+  | 'zoom-in'
+  | 'pop-in';
 
 export interface Keyframe {
   id: string;
@@ -39,6 +49,11 @@ export interface BaseElement {
   visible: boolean;
   locked: boolean;
   keyframes?: Keyframe[];
+  // Entrance & exit motion presets (visual elements; evaluated on top of keyframes)
+  entranceAnimation?: EntranceAnimation;
+  entranceDuration?: number; // seconds (default 0.5, 0 = instant)
+  exitAnimation?: EntranceAnimation;
+  exitDuration?: number; // seconds (default 0.5, 0 = instant)
 }
 
 export interface DesktopIconItem {

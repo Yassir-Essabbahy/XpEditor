@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { AssistantElement } from '../../types/editor';
 import { XP_ASSISTANT_POSE_MAP, XP_ASSISTANT_SHEET } from '../../utils/xpAssets';
-import { evaluateAssistantDialogue } from '../../utils/keyframeAnimation';
+import { evaluateAssistantDialogue, getAnimatedElementProps, evaluateTransitions } from '../../utils/keyframeAnimation';
 
 interface XpAssistantProps {
   element: AssistantElement;
@@ -37,18 +37,13 @@ export const XpAssistant: React.FC<XpAssistantProps> = ({ element, isSelected, c
   const showDialogue = evalDialogue.showDialogue && Boolean(evalDialogue.dialogueText);
   const bubblePos = evalDialogue.bubblePosition;
 
-  // Calculate fade-in and fade-out opacity
-  let fadeAlpha = 1;
+  // Opacity = keyframed base × entrance/exit transition (incl. legacy
+  // fadeIn/fadeOut fallback when no preset is set). Outer CanvasStage keeps
+  // base opacity for assistants so the product is applied exactly once here.
+  const baseOpacity = getAnimatedElementProps(element, currentTime).opacity;
+  const tr = evaluateTransitions(element, currentTime);
+  let fadeAlpha = Math.max(0, Math.min(1, baseOpacity * tr.opacity));
   const relTime = currentTime - element.startTime;
-  if (element.fadeInDuration && element.fadeInDuration > 0 && relTime < element.fadeInDuration) {
-    fadeAlpha = Math.max(0, Math.min(1, relTime / element.fadeInDuration));
-  } else if (
-    element.fadeOutDuration &&
-    element.fadeOutDuration > 0 &&
-    element.duration - relTime < element.fadeOutDuration
-  ) {
-    fadeAlpha = Math.max(0, Math.min(1, (element.duration - relTime) / element.fadeOutDuration));
-  }
 
   // When selected in the editor, ensure the element is never invisible so the user can always see and edit it
   if (isSelected) {

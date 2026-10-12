@@ -2,7 +2,8 @@ import {
   CanvasElement, 
   Keyframe, 
   KeyframeProperty, 
-  KeyframeEasing, 
+  KeyframeEasing,
+  EntranceAnimation,
   AssistantElement, 
   DialogueKeyframe,
   AssistantPose, 
@@ -24,11 +25,19 @@ export interface AnimatedElementProps {
  */
 export function applyEasing(progress: number, easing: KeyframeEasing = 'linear'): number {
   const p = Math.max(0, Math.min(1, progress));
-  if (easing === 'ease-in-out') {
-    // Smooth cubic ease-in-out curve
-    return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+  switch (easing) {
+    case 'ease-in':
+      // Cubic ease-in: slow start, fast finish
+      return p * p * p;
+    case 'ease-out':
+      // Cubic ease-out: fast start, gentle landing
+      return 1 - Math.pow(1 - p, 3);
+    case 'ease-in-out':
+      // Smooth cubic ease-in-out curve
+      return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    default:
+      return p;
   }
-  return p;
 }
 
 /**
@@ -145,6 +154,148 @@ export function getAnimatedElementProps(element: CanvasElement, currentTime: num
     volume: (element.type === 'audio' || (element as any).volume !== undefined)
       ? evaluateElementProperty(element, 'volume', currentTime)
       : undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Entrance & exit transition presets ("more animations": fade, slides,
+// zoom-in, pop-in). Evaluated ON TOP of keyframed props so both systems
+// compose. Single shared engine used by CanvasStage preview, XpAssistant
+// preview, and the canvas export renderer — guaranteeing parity.
+// ---------------------------------------------------------------------------
+
+/** Slide distance in canvas percentage points at progress 0. */
+export const TRANSITION_SLIDE_DISTANCE = 20;
+
+export interface TransitionState {
+  /** 0 (hidden) .. 1 (fully visible) — multiply with keyframed opacity. */
+  opacity: number;
+  /** Canvas-percentage-point offsets to add to x/y. */
+  offsetX: number;
+  offsetY: number;
+  /** Scale multiplier applied around the element center. */
+  scale: number;
+}
+
+function easeOutCubic(p: number): number {
+  const c = Math.max(0, Math.min(1, p));
+  return 1 - Math.pow(1 - c, 3);
+}
+
+function backOut(p: number): number {
+  const c = Math.max(0, Math.min(1, p));
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(c - 1, 3) + c1 * Math.pow(c - 1, 2);
+}
+
+/**
+ * Per-side (entrance or exit) transition contribution at a 0..1 progress
+ * value where 0 = hidden/start and 1 = fully visible.
+ */
+function evaluateTransitionSide(
+  animation: EntranceAnimation,
+  progress: number
+): TransitionState {
+  const p = Math.max(0, Math.min(1, progress));
+  const idle: TransitionState = { opacity: 1, offsetX: 0, offsetY: 0, scale: 1 };
+  if (!animation || animation === 'none' || p >= 1) return idle;
+
+  const e = easeOutCubic(p);
+  const hidden = 1 - e;
+  switch (animation) {
+    case 'fade':
+      return { opacity: e, offsetX: 0, offsetY: 0, scale: 1 };
+    case 'slide-left':
+      return { opacity: e, offsetX: -hidden * TRANSITION_SLIDE_DISTANCE, offsetY: 0, scale: 1 };
+    case 'slide-right':
+      return { opacity: e, offsetX: hidden * TRANSITION_SLIDE_DISTANCE, offsetY: 0, scale: 1 };
+    case 'slide-up':
+      return { opacity: e, offsetX: 0, offsetY: -hidden * TRANSITION_SLIDE_DISTANCE, scale: 1 };
+    case 'slide-down':
+      return { opacity: e, offsetX: 0, offsetY: hidden * TRANSITION_SLIDE_DISTANCE, scale: 1 };
+    case 'zoom-in':
+      return { opacity: e, offsetX: 0, offsetY: 0, scale: Math.max(0.001, 0.4 + 0.6 * e) };
+    case 'pop-in': {
+      const b = backOut(p);
+      return { opacity: e, offsetX: 0, offsetY: 0, scale: Math.max(0.001, 0.4 + 0.6 * b) };
+    }
+    default:
+      return idle;
+  }
+}
+
+/**
+ * Evaluates the combined entrance + exit transition state for an element.
+ * Falls back to legacy fadeInDuration/fadeOutDuration (assistant/audio-era
+ * fields) when no entrance/exit preset is set, so older projects keep working
+ * without double-applying when a preset IS set.
+ */
+export function evaluateTransitions(element: CanvasElement, currentTime: number): TransitionState {
+  const el = element as any;
+  const entrance: EntranceAnimation = el.entranceAnimation || 'none';
+  const exit: EntranceAnimation = el.exitAnimation || 'none';
+  const entranceDur = Math.max(0, Number(el.entranceDuration ?? 0.5) || 0);
+  const exitDur = Math.max(0, Number(el.exitDuration ?? 0.5) || 0);
+  const rel = Math.max(0, Math.min(element.duration, currentTime - element.startTime));
+
+  let inState: TransitionState = { opacity: 1, offsetX: 0, offsetY: 0, scale: 1 };
+  let outState: TransitionState = { opacity: 1, offsetX: 0, offsetY: 0, scale: 1 };
+
+  if (entrance !== 'none' && entranceDur > 0) {
+    inState = evaluateTransitionSide(entrance, entranceDur <= 0 ? 1 : rel / entranceDur);
+  } else if ((entrance === 'none' || !el.entranceAnimation) && el.fadeInDuration > 0 && rel < el.fadeInDuration) {
+    // Legacy fade-in fallback (e.g. assistant clips authored before presets).
+    inState = { opacity: Math.max(0, Math.min(1, rel / el.fadeInDuration)), offsetX: 0, offsetY: 0, scale: 1 };
+  }
+
+  if (exit !== 'none' && exitDur > 0) {
+    const timeLeft = element.duration - rel;
+    outState = evaluateTransitionSide(exit, exitDur <= 0 ? 1 : timeLeft / exitDur);
+  } else if ((exit === 'none' || !el.exitAnimation) && el.fadeOutDuration > 0 && element.duration - rel < el.fadeOutDuration) {
+    outState = {
+      opacity: Math.max(0, Math.min(1, (element.duration - rel) / el.fadeOutDuration)),
+      offsetX: 0,
+      offsetY: 0,
+      scale: 1,
+    };
+  }
+
+  return {
+    opacity: Math.max(0, Math.min(1, inState.opacity * outState.opacity)),
+    offsetX: inState.offsetX + outState.offsetX,
+    offsetY: inState.offsetY + outState.offsetY,
+    scale: Math.max(0.001, inState.scale * outState.scale),
+  };
+}
+
+/**
+ * Base keyframed props with entrance/exit transitions applied.
+ * Geometry stays centered: scale shrinks/grows width/height around the
+ * element center, slides add canvas-percentage offsets.
+ */
+export function getTransitionedElementProps(
+  element: CanvasElement,
+  currentTime: number
+): AnimatedElementProps {
+  const base = getAnimatedElementProps(element, currentTime);
+  if (element.type === 'audio') return base;
+  const tr = evaluateTransitions(element, currentTime);
+  if (tr.opacity === 1 && tr.offsetX === 0 && tr.offsetY === 0 && tr.scale === 1) {
+    return base;
+  }
+  const scale = Math.max(0.001, tr.scale);
+  const newW = Math.max(0.1, base.width * scale);
+  const newH = Math.max(0.1, base.height * scale);
+  const cx = base.x + base.width / 2;
+  const cy = base.y + base.height / 2;
+  return {
+    ...base,
+    x: cx - newW / 2 + tr.offsetX,
+    y: cy - newH / 2 + tr.offsetY,
+    width: newW,
+    height: newH,
+    opacity: Math.max(0, Math.min(1, base.opacity * tr.opacity)),
   };
 }
 

@@ -1,6 +1,6 @@
 import { CanvasElement, XpWindowElement, WallpaperElement, ImageViewerElement, DialogElement, DesktopIconElement, TextElement, CursorElement, AssistantElement } from '../types/editor';
 import { formatFriendlyTitle } from './filePicker';
-import { getAnimatedElementProps, evaluateAssistantDialogue } from './keyframeAnimation';
+import { getAnimatedElementProps, getTransitionedElementProps, evaluateAssistantDialogue, evaluateTransitions } from './keyframeAnimation';
 import { XP_ICON_PATHS, XP_CURSOR_PATHS, XP_ASSISTANT_SHEET, XP_ASSISTANT_POSE_MAP } from './xpAssets';
 
 // Cache for loaded HTML images
@@ -175,7 +175,12 @@ export function renderCompositionFrame(
   }
 
   visibleElements.forEach((el) => {
-    const anim = getAnimatedElementProps(el, time);
+    // Transitioned props (entrance/exit presets on top of keyframes) drive
+    // geometry everywhere. Assistant opacity is applied inside drawAssistant
+    // (base here) so the fade is counted exactly once, matching the preview.
+    const base = getAnimatedElementProps(el, time);
+    const full = getTransitionedElementProps(el, time);
+    const anim = el.type === 'assistant' ? { ...full, opacity: base.opacity } : full;
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity));
 
@@ -868,18 +873,11 @@ function drawAssistant(
   w: number,
   h: number
 ) {
-  // Fade-in and fade-out handling
-  let fadeAlpha = 1;
+  // Entrance/exit transition opacity (incl. legacy fade fallback). Outer
+  // scope passes base opacity so the product lands exactly once — same as
+  // the live XpAssistant preview (minus its selection floor).
   const relTime = time - el.startTime;
-  if (el.fadeInDuration && el.fadeInDuration > 0 && relTime < el.fadeInDuration) {
-    fadeAlpha = Math.max(0, Math.min(1, relTime / el.fadeInDuration));
-  } else if (
-    el.fadeOutDuration &&
-    el.fadeOutDuration > 0 &&
-    el.duration - relTime < el.fadeOutDuration
-  ) {
-    fadeAlpha = Math.max(0, Math.min(1, (el.duration - relTime) / el.fadeOutDuration));
-  }
+  const fadeAlpha = evaluateTransitions(el, time).opacity;
 
   const prevAlpha = ctx.globalAlpha;
   ctx.globalAlpha = prevAlpha * fadeAlpha;

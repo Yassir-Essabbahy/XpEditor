@@ -22,7 +22,7 @@ import { XpCursor } from '../XpAssets/XpCursor';
 import { XpAssistant } from '../XpAssets/XpAssistant';
 import { XpTransformBox } from '../XpAssets/XpTransformBox';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { getAnimatedElementProps, addOrUpdateKeyframe } from '../../utils/keyframeAnimation';
+import { getAnimatedElementProps, getTransitionedElementProps, addOrUpdateKeyframe } from '../../utils/keyframeAnimation';
 
 interface CanvasStageProps {
   elements: CanvasElement[];
@@ -295,7 +295,14 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
         <div className="canvas-scene">
           {visibleElements.map((el) => {
             const isSelected = el.id === selectedElementId;
-            const anim = getAnimatedElementProps(el, currentTime);
+            // Rendered props include entrance/exit transitions; keyframe editing
+            // and drag logic below intentionally keep using the base keyframed
+            // values so transition offsets are never baked into keyframes.
+            // Assistant opacity stays base here — XpAssistant applies the
+            // transition opacity itself (plus a selection floor while editing).
+            const base = getAnimatedElementProps(el, currentTime);
+            const full = getTransitionedElementProps(el, currentTime);
+            const anim = el.type === 'assistant' ? { ...full, opacity: base.opacity } : full;
 
             return (
               <div
