@@ -184,5 +184,21 @@ assert(/defaultPrevented/.test(appSrc),'app: Delete guard respects keyframe-dele
   assert(/firstX/.test(inspSrc) && /firstY/.test(inspSrc),'inspector: cursor glide presets preserve first-kf base (no jump)');
 }
 
+console.log('\n--- 7. Video & audio in preview/export ---');
+const compSrc2 = read('src/utils/compositionRenderer.ts');
+const expSrc = read('src/components/Export/ExportModal.tsx');
+const stageSrc2 = read('src/components/Preview/CanvasStage.tsx');
+const sndSrc = read('src/utils/xpSounds.ts');
+assert(/case 'video':/.test(compSrc2),'export: video clips drawn into composition (not black)');
+assert(/getVideoElement/.test(compSrc2) && /getAudioElement/.test(compSrc2),'renderer: pooled video/audio media pools');
+assert(/routeMediaToMix/.test(compSrc2),'renderer: media routable into export audio mix');
+assert(/MediaStreamDestination/.test(expSrc) || /createMediaStreamDestination/.test(expSrc),'export: audio mix destination combined with canvas stream');
+assert(/audioBitsPerSecond/.test(expSrc),'export: recorder captures audio track');
+assert(/getExportAudioVolume|getExportVideoVolume/.test(expSrc),'export: per-frame volume automation (keyframes x fades)');
+assert(/scheduleBuiltinSound/.test(expSrc) && /scheduleBuiltinSound/.test(sndSrc),'export: builtin SFX scheduled into mix');
+assert(/SyncedVideo/.test(stageSrc2),'preview: timeline-synced video playback');
+assert(/Relink Video File/.test(stageSrc2),'preview: relink UI for expired blob URLs');
+assert(/isPlaying/.test(stageSrc2),'preview: stage transport state drives video play/pause');
+
 console.log(`\n=== RESULT: ${pass}/${total} passed ===`);
 if (failures.length) { console.error('Failures:\n - '+failures.join('\n - ')); }

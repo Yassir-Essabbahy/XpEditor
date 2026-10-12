@@ -966,6 +966,7 @@ export const App: React.FC = () => {
             settings={settings}
             selectedElementId={editorState.selectedElementId}
             previewZoom={editorState.previewZoom}
+            isPlaying={editorState.isPlaying}
             onSelectElement={(id) => setEditorState((prev) => ({ ...prev, selectedElementId: id }))}
             onUpdateElement={handleUpdateElement}
             onZoomChange={(zoom) => setEditorState((prev) => ({ ...prev, previewZoom: zoom }))}

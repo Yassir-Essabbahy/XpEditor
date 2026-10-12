@@ -30,6 +30,7 @@ interface CanvasStageProps {
   settings: CompositionSettings;
   selectedElementId: string | null;
   previewZoom: number;
+  isPlaying?: boolean;
   onSelectElement: (id: string | null) => void;
   onUpdateElement: (id: string, updates: Partial<CanvasElement>) => void;
   onZoomChange: (zoom: number) => void;
@@ -37,12 +38,124 @@ interface CanvasStageProps {
   onSeek?: (time: number) => void;
 }
 
+/**
+ * Timeline-synced video preview. Snaps to the playhead when scrubbing/paused
+ * and plays along while the transport runs (preview stays muted; the export
+ * mix carries the clip's audio). Offers one-click relinking when a blob: URL
+ * died (e.g. project reopened after reload).
+ */
+const SyncedVideo: React.FC<{
+  element: VideoElement;
+  currentTime: number;
+  isPlaying: boolean;
+  onRelink: (src: string) => void;
+}> = ({ element, currentTime, isPlaying, onRelink }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [failed, setFailed] = useState(false);
+  const relTime = Math.max(0, Math.min(element.duration, currentTime - element.startTime));
+
+  useEffect(() => {
+    setFailed(false);
+  }, [element.videoSrc, element.id]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || failed) return;
+    try {
+      if (isPlaying) {
+        if (v.readyState >= 1 && Math.abs(v.currentTime - relTime) > 0.35) {
+          v.currentTime = relTime;
+        }
+        if (v.paused) {
+          v.play().catch(() => {});
+        }
+      } else {
+        if (!v.paused) v.pause();
+        if (v.readyState >= 1 && Math.abs(v.currentTime - relTime) > 0.08) {
+          v.currentTime = relTime;
+        }
+      }
+    } catch {}
+  }, [currentTime, isPlaying, failed, relTime]);
+
+  const isBlob = (element.videoSrc || '').startsWith('blob:');
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
+      {!failed ? (
+        <video
+          key={`${element.id}:${element.videoSrc || 'none'}`}
+          ref={videoRef}
+          src={element.videoSrc}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: element.fitMode || 'contain',
+            display: 'block',
+            pointerEvents: 'none',
+            background: '#000',
+          }}
+          muted
+          playsInline
+          preload="auto"
+          loop={element.loop}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: '#1c2530',
+            border: '1px dashed #3b82f6',
+            color: '#9fb3c8',
+            fontSize: '11px',
+            textAlign: 'center',
+            padding: '8px',
+            pointerEvents: 'auto',
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span>{isBlob ? 'Video file unlinked (blob URL expired after reload).' : 'Video could not be loaded.'}</span>
+          <button
+            type="button"
+            className="editor-btn primary"
+            style={{ fontSize: '11px', padding: '4px 10px' }}
+            onClick={() => fileRef.current?.click()}
+          >
+            Relink Video File
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="video/mp4,video/webm"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onRelink(URL.createObjectURL(f));
+              e.target.value = '';
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const CanvasStage: React.FC<CanvasStageProps> = ({
   elements,
   currentTime,
   settings,
   selectedElementId,
   previewZoom,
+  isPlaying,
   onSelectElement,
   onUpdateElement,
   onZoomChange,
@@ -396,20 +509,13 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({
                   </div>
                 )}
 
-                {/* 9. Video Clip */}
+                {/* 9. Video Clip (timeline-synced, muted preview) */}
                 {el.type === 'video' && (
-                  <video
-                    src={(el as VideoElement).videoSrc}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: (el as VideoElement).fitMode || 'contain',
-                      display: 'block',
-                      pointerEvents: 'none',
-                    }}
-                    autoPlay
-                    muted
-                    loop={(el as VideoElement).loop}
+                  <SyncedVideo
+                    element={el as VideoElement}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying ?? false}
+                    onRelink={(src) => onUpdateElement(el.id, { videoSrc: src } as any)}
                   />
                 )}
 

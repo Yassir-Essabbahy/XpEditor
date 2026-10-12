@@ -1,10 +1,19 @@
-import { CanvasElement, XpWindowElement, WallpaperElement, ImageViewerElement, DialogElement, DesktopIconElement, TextElement, CursorElement, AssistantElement } from '../types/editor';
+import { CanvasElement, XpWindowElement, WallpaperElement, ImageViewerElement, DialogElement, DesktopIconElement, TextElement, CursorElement, AssistantElement, VideoElement, AudioElement } from '../types/editor';
 import { formatFriendlyTitle } from './filePicker';
-import { getAnimatedElementProps, getTransitionedElementProps, evaluateAssistantDialogue, evaluateTransitions } from './keyframeAnimation';
+import { getAnimatedElementProps, getTransitionedElementProps, evaluateAssistantDialogue, evaluateTransitions, evaluateAudioVolume } from './keyframeAnimation';
 import { XP_ICON_PATHS, XP_CURSOR_PATHS, XP_ASSISTANT_SHEET, XP_ASSISTANT_POSE_MAP } from './xpAssets';
 
 // Cache for loaded HTML images
 const imageCache = new Map<string, HTMLImageElement>();
+
+// Media pools for video/audio clip elements. Owned by the renderer so the
+// export pass can draw video frames AND route element audio into one mix
+// from the same <video>/<audio> instances (preview uses its own instances).
+const videoPool = new Map<string, HTMLVideoElement>();
+const audioPool = new Map<string, HTMLAudioElement>();
+// One MediaElementSource per media element (browser throws on a second one),
+// reused across repeat exports.
+const mediaSourceMap = new WeakMap<HTMLMediaElement, { ctx: AudioContext; gain: GainNode }>();
 
 export function preloadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve) => {
@@ -31,6 +40,7 @@ export function preloadImage(src: string): Promise<HTMLImageElement> {
 // Preload all assets present in composition
 export async function preloadCompositionAssets(elements: CanvasElement[]): Promise<void> {
   const promises: Promise<HTMLImageElement>[] = [];
+  const mediaPromises: Promise<unknown>[] = [];
 
   elements.forEach((el) => {
     if (el.type === 'wallpaper') {
@@ -62,10 +72,189 @@ export async function preloadCompositionAssets(elements: CanvasElement[]): Promi
       Object.values(XP_ASSISTANT_POSE_MAP).forEach((src) => {
         promises.push(preloadImage(src));
       });
+    } else if (el.type === 'video') {
+      mediaPromises.push(preloadVideoForElement(el as VideoElement));
+    } else if (el.type === 'audio') {
+      const src = (el as AudioElement).audioSrc;
+      if (src && !src.startsWith('builtin:')) {
+        mediaPromises.push(preloadAudioForElement(el as AudioElement));
+      }
     }
   });
 
   await Promise.all(promises);
+  // Media preloads must never block the export (dead blob URLs after a
+  // project reload, missing files, slow network) — bounded wait.
+  await Promise.all(
+    mediaPromises.map((p) =>
+      Promise.race([
+        p,
+        new Promise((resolve) => setTimeout(resolve, 5000)).then(() => null),
+      ]).catch(() => null)
+    )
+  );
+}
+
+/**
+ * Returns (creating if needed) the pooled <video> for a video clip element.
+ * Pooled instance is paused by default; callers drive play/pause/seek.
+ * Returns null when the element has no usable source.
+ */
+export function getVideoElement(el: VideoElement): HTMLVideoElement | null {
+  if (!el.videoSrc) return null;
+  let v = videoPool.get(el.id);
+  if (v && v.dataset.src === el.videoSrc) return v;
+  // Source changed (e.g. relinked file) — drop the stale instance.
+  if (v) {
+    try { v.pause(); } catch {}
+    v.removeAttribute('src');
+    videoPool.delete(el.id);
+  }
+  v = document.createElement('video');
+  v.muted = false;
+  v.playsInline = true;
+  (v as any).playsinline = true;
+  v.preload = 'auto';
+  v.loop = !!el.loop;
+  (v as any).disablePictureInPicture = true;
+  if (el.videoSrc.startsWith('http://') || el.videoSrc.startsWith('https://')) {
+    v.crossOrigin = 'anonymous';
+  }
+  v.dataset.src = el.videoSrc;
+  v.src = el.videoSrc;
+  try { v.load(); } catch {}
+  videoPool.set(el.id, v);
+  return v;
+}
+
+/** Preloads a video clip until first frame is available (bounded wait). */
+export function preloadVideoForElement(el: VideoElement): Promise<HTMLVideoElement | null> {
+  return new Promise((resolve) => {
+    const v = getVideoElement(el);
+    if (!v) { resolve(null); return; }
+    if (v.readyState >= 2) { resolve(v); return; }
+    const done = () => { cleanup(); resolve(v); };
+    const fail = () => { cleanup(); resolve(v); };
+    const cleanup = () => {
+      v.removeEventListener('canplay', done);
+      v.removeEventListener('error', fail);
+    };
+    v.addEventListener('canplay', done);
+    v.addEventListener('error', fail);
+    setTimeout(() => { cleanup(); resolve(v); }, 5000);
+  });
+}
+
+/**
+ * Returns (creating if needed) the pooled <audio> for an audio clip element.
+ * File-based sources only — builtin: SFX ids are synthesized at mix time.
+ */
+export function getAudioElement(el: AudioElement): HTMLAudioElement | null {
+  if (!el.audioSrc || el.audioSrc.startsWith('builtin:')) return null;
+  let a = audioPool.get(el.id);
+  if (a && a.dataset.src === el.audioSrc) return a;
+  if (a) {
+    try { a.pause(); } catch {}
+    audioPool.delete(el.id);
+  }
+  a = new Audio();
+  a.preload = 'auto';
+  a.loop = !!el.loop;
+  a.dataset.src = el.audioSrc;
+  a.src = el.audioSrc;
+  audioPool.set(el.id, a);
+  return a;
+}
+
+export function preloadAudioForElement(el: AudioElement): Promise<HTMLAudioElement | null> {
+  return new Promise((resolve) => {
+    const a = getAudioElement(el);
+    if (!a) { resolve(null); return; }
+    if (a.readyState >= 2) { resolve(a); return; }
+    const done = () => { cleanup(); resolve(a); };
+    const fail = () => { cleanup(); resolve(a); };
+    const cleanup = () => {
+      a.removeEventListener('canplaythrough', done);
+      a.removeEventListener('canplay', done);
+      a.removeEventListener('error', fail);
+    };
+    a.addEventListener('canplaythrough', done);
+    a.addEventListener('canplay', done);
+    a.addEventListener('error', fail);
+    setTimeout(() => { cleanup(); resolve(a); }, 5000);
+  });
+}
+
+/** Pauses every pooled media element (export teardown / new export start). */
+export function stopAllPooledMedia(): void {
+  videoPool.forEach((v) => { try { v.pause(); } catch {} });
+  audioPool.forEach((a) => { try { a.pause(); } catch {} });
+}
+
+/** Drops pooled instances whose element no longer exists (or changed src). */
+export function pruneMediaPools(liveIds: Set<string>): void {
+  videoPool.forEach((v, id) => {
+    if (!liveIds.has(id)) {
+      try { v.pause(); } catch {}
+      v.removeAttribute('src');
+      videoPool.delete(id);
+    }
+  });
+  audioPool.forEach((a, id) => {
+    if (!liveIds.has(id)) {
+      try { a.pause(); } catch {}
+      audioPool.delete(id);
+    }
+  });
+}
+
+/**
+ * Routes a pooled media element into an export AudioContext mix, creating
+ * the (single-per-element) MediaElementSource on first use. Returns the
+ * per-element GainNode for volume automation, or null if routing failed
+ * (e.g. CORS-tainted remote source — canvas video still draws, just silent).
+ */
+export function routeMediaToMix(
+  media: HTMLMediaElement,
+  ctx: AudioContext,
+  dest: AudioNode
+): GainNode | null {
+  try {
+    const existing = mediaSourceMap.get(media);
+    if (existing && existing.ctx === ctx) {
+      try { existing.gain.disconnect(); } catch {}
+      existing.gain.connect(dest);
+      return existing.gain;
+    }
+    const src = ctx.createMediaElementSource(media);
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    src.connect(gain);
+    gain.connect(dest);
+    mediaSourceMap.set(media, { ctx, gain });
+    return gain;
+  } catch (err) {
+    console.warn('Could not route media element into export mix:', err);
+    return null;
+  }
+}
+
+/** Current export-safe volume for an audio clip (keyframes × fades). */
+export function getExportAudioVolume(el: AudioElement, time: number): number {
+  try {
+    return evaluateAudioVolume(el as unknown as CanvasElement, time);
+  } catch {
+    return el.volume ?? 0.8;
+  }
+}
+
+/** Current export-safe volume for a video clip's audio track. */
+export function getExportVideoVolume(el: VideoElement, time: number): number {
+  try {
+    return evaluateAudioVolume(el as unknown as CanvasElement, time);
+  } catch {
+    return (el as any).volume ?? 1;
+  }
 }
 
 // Helper to draw clean vector XP window buttons on Canvas 2D
@@ -226,10 +415,86 @@ export function renderCompositionFrame(
       case 'assistant':
         drawAssistant(ctx, el as AssistantElement, time, x, y, w, h);
         break;
+      case 'video':
+        drawVideo(ctx, el as VideoElement, time, x, y, w, h);
+        break;
+      // Audio clips are sound-only (mixed into the export, played live in preview).
     }
 
     ctx.restore();
   });
+}
+
+// 10. Draw Video Clip frame (pooled <video>, driven by callers)
+function drawVideo(
+  ctx: CanvasRenderingContext2D,
+  el: VideoElement,
+  time: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  if (w <= 0 || h <= 0) return;
+  const v = getVideoElement(el);
+  // Letterbox backdrop so contain-fit never shows transparency.
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(x, y, w, h);
+  if (!v || v.readyState < 2 || v.videoWidth <= 0 || v.videoHeight <= 0) {
+    // Source missing (e.g. dead blob URL after project reload): slate + label.
+    ctx.fillStyle = '#1c2530';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px Tahoma, sans-serif';
+    ctx.textAlign = 'center';
+    const label = el.videoSrc && el.videoSrc.startsWith('blob:')
+      ? 'Video source unlinked — relink the file'
+      : 'Video unavailable';
+    ctx.fillText(label, x + w / 2, y + h / 2);
+    return;
+  }
+  // Keep playback roughly glued to the timeline when callers seek per frame;
+  // live playback otherwise just draws the current frame.
+  const rel = Math.max(0, time - el.startTime);
+  if (v.paused && v.readyState >= 2) {
+    const target = v.loop ? rel % Math.max(0.1, el.duration) : rel;
+    const srcDur = isFinite(v.duration) && v.duration > 0 ? v.duration : el.duration;
+    const want = !v.loop && srcDur > 0 ? Math.min(target, Math.max(0, srcDur - 0.05)) : target;
+    if (Math.abs(v.currentTime - want) > 0.25) {
+      try { v.currentTime = Math.max(0, want); } catch {}
+    }
+  }
+  const fit = el.fitMode || 'contain';
+  const vw = v.videoWidth;
+  const vh = v.videoHeight;
+  let dw = w;
+  let dh = h;
+  let dx = x;
+  let dy = y;
+  if (fit === 'cover') {
+    const s = Math.max(w / vw, h / vh);
+    dw = vw * s; dh = vh * s;
+    dx = x + (w - dw) / 2; dy = y + (h - dh) / 2;
+  } else {
+    const s = Math.min(w / vw, h / vh);
+    dw = vw * s; dh = vh * s;
+    dx = x + (w - dw) / 2; dy = y + (h - dh) / 2;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(x, y, w, h);
+  try {
+    ctx.drawImage(v, dx, dy, dw, dh);
+  } catch {
+    // Tainted/empty frame — slate already painted behind.
+  }
+  ctx.restore();
 }
 
 // 1. Draw Wallpaper

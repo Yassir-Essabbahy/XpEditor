@@ -9,8 +9,33 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { CanvasElement, CompositionSettings } from '../../types/editor';
-import { preloadCompositionAssets, renderCompositionFrame } from '../../utils/compositionRenderer';
+import { CanvasElement, CompositionSettings, VideoElement, AudioElement } from '../../types/editor';
+import {
+  preloadCompositionAssets,
+  renderCompositionFrame,
+  getVideoElement,
+  getAudioElement,
+  routeMediaToMix,
+  getExportAudioVolume,
+  getExportVideoVolume,
+  stopAllPooledMedia,
+  pruneMediaPools,
+} from '../../utils/compositionRenderer';
+import { scheduleBuiltinSound } from '../../utils/xpSounds';
+
+// One AudioContext reused across exports: a <video>/<audio> element accepts a
+// single MediaElementSource for its lifetime, so the mix context must persist.
+let sharedExportCtx: AudioContext | null = null;
+function getSharedExportCtx(): AudioContext {
+  if (!sharedExportCtx) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    sharedExportCtx = new AudioCtx();
+  }
+  if (sharedExportCtx.state === 'suspended') {
+    sharedExportCtx.resume().catch(() => {});
+  }
+  return sharedExportCtx;
+}
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -39,6 +64,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [exportWidth, setExportWidth] = useState(settings.width);
   const [exportHeight, setExportHeight] = useState(settings.height);
   const [exportFps, setExportFps] = useState(settings.fps);
+  const cancelRef = React.useRef(false);
 
   if (!isOpen) return null;
 
@@ -47,16 +73,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const ffmpegCmd = `ffmpeg -y -i ${sanitizedName}_raw.webm -c:v libx264 -pix_fmt yuv420p -preset fast -crf 20 -c:a aac ${sanitizedName}.mp4`;
 
   const handleStartExport = async () => {
+    cancelRef.current = false;
+    // Snapshot: teardown below must restore these even if props change mid-export.
+    const clipElements = elements;
+    const clipDuration = settings.duration;
     try {
       setExporting(true);
       setErrorMessage(null);
       setProgress(0);
-      setStatusText('Preloading composition assets & images...');
+      setStatusText('Preloading composition assets, video & audio...');
+      setDownloadUrl(null);
 
-      // 1. Preload assets
-      await preloadCompositionAssets(elements);
+      // 1. Preload images + video/audio clip media (bounded waits inside).
+      await preloadCompositionAssets(clipElements);
+      pruneMediaPools(new Set(clipElements.map((e) => e.id)));
+      stopAllPooledMedia();
+      if (cancelRef.current) throw new Error('Export cancelled.');
 
-      // 2. Setup Offscreen Canvas
+      // 2. Setup canvas
       const width = exportWidth;
       const height = exportHeight;
       const canvas = document.createElement('canvas');
@@ -68,19 +102,87 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         throw new Error('Canvas 2D rendering context is not supported or could not be allocated.');
       }
 
-      setStatusText('Initializing video stream recorder...');
+      setStatusText('Preparing audio mix (video + audio tracks)...');
 
-      // Setup MediaRecorder
-      const stream = canvas.captureStream(exportFps);
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-        ? 'video/webm;codecs=vp9'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-          ? 'video/webm;codecs=vp8'
-          : 'video/webm';
+      // 3. Shared mix context + per-export destination. Media elements stay
+      // routed ONLY into the mix (never to speakers) so the tab stays silent.
+      const audioCtx = getSharedExportCtx();
+      await audioCtx.resume().catch(() => {});
+      const mixDest = audioCtx.createMediaStreamDestination();
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
+      interface ClipSound {
+        el: VideoElement | AudioElement;
+        kind: 'video' | 'audio';
+        media: HTMLMediaElement | null;
+        gain: GainNode | null;
+        entered: boolean;
+      }
+      const clipSounds: ClipSound[] = [];
+      for (const el of clipElements) {
+        if (!el.visible) continue;
+        if (el.type === 'video') {
+          const v = el as VideoElement;
+          const media = getVideoElement(v);
+          if (media) {
+            try { media.pause(); media.currentTime = 0; } catch {}
+            media.loop = !!v.loop;
+            const gain = routeMediaToMix(media, audioCtx, mixDest);
+            clipSounds.push({ el: v, kind: 'video', media, gain, entered: false });
+          }
+        } else if (el.type === 'audio') {
+          const a = el as AudioElement;
+          if (a.audioSrc.startsWith('builtin:')) {
+            // One-shot synth scheduled at the clip offset with keyframed volume.
+            try {
+              const vol = getExportAudioVolume(a, a.startTime + 0.01);
+              scheduleBuiltinSound(audioCtx, mixDest, a.audioSrc, vol, a.startTime);
+            } catch (err) {
+              console.warn('Builtin SFX schedule failed:', err);
+            }
+          } else {
+            const media = getAudioElement(a);
+            if (media) {
+              try { media.pause(); media.currentTime = 0; } catch {}
+              media.loop = !!a.loop;
+              const gain = routeMediaToMix(media, audioCtx, mixDest);
+              clipSounds.push({ el: a, kind: 'audio', media, gain, entered: false });
+            }
+          }
+        }
+      }
+
+      setStatusText('Starting realtime capture (video + audio)...');
+
+      // 4. Combined stream: canvas video track + mixed audio tracks.
+      const canvasStream = canvas.captureStream(exportFps);
+      const videoTracks = canvasStream.getVideoTracks();
+      if (videoTracks.length === 0) {
+        throw new Error('Canvas stream produced no video track.');
+      }
+      const combined = new MediaStream([
+        ...videoTracks,
+        ...mixDest.stream.getAudioTracks(),
+      ]);
+      const pickMime = (): string => {
+        const cands = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm;codecs=vp9',
+          'video/webm;codecs=vp8',
+          'video/webm',
+        ];
+        for (const c of cands) {
+          try {
+            if (MediaRecorder.isTypeSupported(c)) return c;
+          } catch {}
+        }
+        return '';
+      };
+      const mimeType = pickMime();
+      const recorder = new MediaRecorder(combined, {
+        ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: 16000000, // 16 Mbps high definition
+        audioBitsPerSecond: 128000,
       });
 
       const chunks: Blob[] = [];
@@ -89,42 +191,108 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           chunks.push(e.data);
         }
       };
+      const stopped = new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+      });
+      recorder.start(250);
 
-      recorder.start();
-
-      // 3. Render frame by frame
+      // 5. Realtime capture pass: drive canvas frames + clip playback + per-
+      // frame volume automation (keyframes × fades) for the whole duration.
+      // Keep the tab visible — background tabs throttle rAF and would gap.
       const fps = exportFps;
-      const duration = settings.duration;
+      const duration = clipDuration;
+      const t0 = performance.now();
+      let lastDrawnFrame = -1;
 
-      for (let frame = 0; frame <= totalFrames; frame++) {
-        const time = frame / fps;
-        renderCompositionFrame(ctx, elements, time, width, height);
+      await new Promise<void>((resolve) => {
+        const tick = () => {
+          if (cancelRef.current) { resolve(); return; }
+          const elapsed = (performance.now() - t0) / 1000;
+          const time = Math.min(elapsed, duration);
 
-        const pct = Math.round((frame / totalFrames) * 92);
-        setProgress(pct);
-        setStatusText(`Rendering frame ${frame} of ${totalFrames} (${Math.round((time / duration) * 100)}%)...`);
+          for (const cs of clipSounds) {
+            const m = cs.media;
+            if (!m) continue;
+            const active =
+              time >= cs.el.startTime - 0.001 &&
+              time <= cs.el.startTime + cs.el.duration + 0.001;
+            try {
+              if (active && !cs.entered) {
+                cs.entered = true;
+                const off = Math.max(0, time - cs.el.startTime);
+                try {
+                  if (Math.abs((m.currentTime || 0) - off) > 0.3) m.currentTime = off;
+                } catch {}
+                m.play().catch(() => {});
+              } else if (!active && cs.entered) {
+                if (time < cs.el.startTime) cs.entered = false;
+                else m.pause();
+              }
+            } catch {}
+            // Volume automation every frame: smooth via setTargetAtTime.
+            try {
+              const vol =
+                cs.kind === 'audio'
+                  ? getExportAudioVolume(cs.el as AudioElement, time)
+                  : getExportVideoVolume(cs.el as VideoElement, time);
+              if (cs.gain) cs.gain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.03);
+              else (m as HTMLMediaElement).volume = Math.max(0, Math.min(1, vol));
+            } catch {}
+          }
 
-        // Small delay to yield to UI and stream recorder
-        await new Promise((r) => setTimeout(r, 1000 / (fps * 2)));
+          const frame = Math.floor(time * fps);
+          if (frame !== lastDrawnFrame) {
+            lastDrawnFrame = frame;
+            try {
+              renderCompositionFrame(ctx, clipElements, time, width, height);
+            } catch (err) {
+              console.warn('Frame render failed:', err);
+            }
+            const pct = Math.round((time / duration) * 100);
+            setProgress(pct);
+            setStatusText(`Capturing ${time.toFixed(1)}s of ${duration}s (video + audio, realtime)...`);
+          }
+
+          // Small audio tail so reverb/one-shots aren't hard-cut.
+          if (elapsed >= duration + 0.4) { resolve(); return; }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+
+      // 6. Teardown media before finalizing the container.
+      stopAllPooledMedia();
+      if (cancelRef.current) {
+        try { recorder.stop(); } catch {}
+        await stopped;
+        setStatusText('Export cancelled.');
+        setProgress(0);
+        return;
       }
 
       setStatusText('Finalizing video container...');
       recorder.stop();
+      await stopped;
 
-      await new Promise<void>((resolve) => {
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          setDownloadUrl(url);
-          setProgress(100);
-          setStatusText('Video successfully rendered!');
-          resolve();
-        };
-      });
+      const type = mimeType || 'video/webm';
+      const blob = new Blob(chunks, { type });
+      if (blob.size === 0) {
+        throw new Error('Recorder produced no data — try a shorter duration or a different browser.');
+      }
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setProgress(100);
+      setStatusText('Video successfully rendered with picture + sound!');
     } catch (err: any) {
       console.error('Export failed:', err);
-      setErrorMessage(err.message || 'An unexpected rendering error occurred during export.');
-      setStatusText('Render failed.');
+      stopAllPooledMedia();
+      if (err?.message === 'Export cancelled.') {
+        setStatusText('Export cancelled.');
+        setProgress(0);
+      } else {
+        setErrorMessage(err.message || 'An unexpected rendering error occurred during export.');
+        setStatusText('Render failed.');
+      }
     } finally {
       setExporting(false);
     }
@@ -174,7 +342,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
             <div>
               <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>Export MP4 Video</h2>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Render Windows XP Simulation using FFmpeg</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Realtime capture with video + audio, then convert via FFmpeg</p>
             </div>
           </div>
           <button 
@@ -301,7 +469,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <span style={{ fontWeight: 600, fontSize: '13px' }}>Composition Render Complete!</span>
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-              The video composition has been frame-accurately rendered with all wallpapers, XP window chrome, image viewer controls, dialogs, and text.
+              The composition was captured in realtime with video-clip picture, audio tracks, XP window chrome, dialogs, and text.
+              Keep this tab visible during capture — background tabs throttle rendering.
             </p>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
@@ -340,8 +509,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-          <button className="editor-btn" onClick={onClose} disabled={exporting}>
-            Cancel
+          <button
+            className="editor-btn"
+            onClick={() => {
+              if (exporting) cancelRef.current = true;
+              else onClose();
+            }}
+          >
+            {exporting ? 'Cancel Export' : 'Cancel'}
           </button>
           {!downloadUrl ? (
             <button
