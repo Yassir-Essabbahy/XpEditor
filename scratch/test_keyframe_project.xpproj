@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "name": "XP Studio Animated Desktop",
+  "settings": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "duration": 10,
+    "aspectRatio": "16:9"
+  },
+  "elements": [
+    {
+      "id": "bg-1",
+      "type": "wallpaper",
+      "startTime": 0,
+      "duration": 10,
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 100,
+      "zIndex": 1,
+      "opacity": 1,
+      "visible": true,
+      "imageSrc": "/assets/WindowsXp_Background.jpg"
+    },
+    {
+      "id": "viewer-anim",
+      "name": "Animated Picture Viewer",
+      "type": "image-viewer",
+      "startTime": 0,
+      "duration": 10,
+      "x": 10,
+      "y": 10,
+      "width": 40,
+      "height": 40,
+      "rotation": 0,
+      "opacity": 1,
+      "zIndex": 10,
+      "visible": true,
+      "imageSrc": "/assets/Paint.jpg",
+      "keyframes": [
+        {
+          "id": "kf-1",
+          "time": 0,
+          "property": "x",
+          "value": 10,
+          "easing": "linear"
+        },
+        {
+          "id": "kf-2",
+          "time": 3,
+          "property": "x",
+          "value": 50,
+          "easing": "ease-in-out"
+        },
+        {
+          "id": "kf-3",
+          "time": 0,
+          "property": "rotation",
+          "value": 0,
+          "easing": "linear"
+        },
+        {
+          "id": "kf-4",
+          "time": 3,
+          "property": "rotation",
+          "value": 90,
+          "easing": "ease-in-out"
+        },
+        {
+          "id": "kf-5",
+          "time": 3,
+          "property": "opacity",
+          "value": 1,
+          "easing": "linear"
+        },
+        {
+          "id": "kf-6",
+          "time": 6,
+          "property": "opacity",
+          "value": 0.25,
+          "easing": "linear"
+        }
+      ]
+    }
+  ],
+  "assets": []
+}

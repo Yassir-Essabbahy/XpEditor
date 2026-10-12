@@ -1,0 +1,946 @@
+/* Authentic Windows XP Font Registration */
+@font-face {
+  font-family: 'Tahoma';
+  src: url('/assets/xp/fonts/tahoma.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* Modern Neutral Video Editor Styles */
+:root {
+  --bg-app: #0d0f12;
+  --bg-surface: #14171d;
+  --bg-panel: #1a1e26;
+  --bg-panel-hover: #222733;
+  --bg-panel-active: #2a3140;
+  --bg-input: #101217;
+  --border-color: #262b36;
+  --border-color-light: #323847;
+  
+  --text-main: #e2e8f0;
+  --text-muted: #8b95a5;
+  --text-dim: #5a6475;
+  
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-light: rgba(59, 130, 246, 0.15);
+  --accent-glow: rgba(59, 130, 246, 0.3);
+  
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #10b981;
+  
+  --timeline-track-bg: #13161c;
+  --timeline-ruler-bg: #161920;
+  --playhead-color: #f43f5e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  font-size: 13px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* App Layout */
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg-app);
+}
+
+/* Modern Top Header */
+.editor-header {
+  height: 48px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.header-left, .header-center, .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.brand-icon-chip {
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.project-title {
+  color: var(--text-muted);
+  font-size: 12px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+}
+
+.editor-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-btn:hover {
+  background: var(--bg-panel-hover);
+  border-color: var(--border-color-light);
+  color: #fff;
+}
+
+.editor-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.editor-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.editor-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Main Workspace */
+.editor-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Left Sidebar */
+.editor-sidebar {
+  width: 320px;
+  min-width: 280px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-app);
+}
+
+.sidebar-tab-btn {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sidebar-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.sidebar-tab-btn.active {
+  color: #fff;
+  border-bottom-color: var(--accent);
+  background: var(--bg-surface);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* Central Preview Stage */
+.editor-stage-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  min-width: 0;
+  position: relative;
+}
+
+.stage-viewport-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 24px;
+  background: radial-gradient(circle at center, #171b24 0%, #0d0f13 100%);
+  position: relative;
+}
+
+/* Video Canvas Display Container (The Output Video Frame) */
+.video-canvas-container {
+  position: relative;
+  background: #000;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 860px;
+}
+
+/* Inside the Canvas: Simulated Windows XP Content */
+.canvas-scene {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+
+/* Canvas Element Overlay Base */
+.canvas-element {
+  position: absolute;
+  cursor: grab;
+  transition: box-shadow 0.15s;
+}
+
+.canvas-element.selected {
+  outline: 2px solid var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.canvas-element.selected::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px dashed rgba(59, 130, 246, 0.7);
+  pointer-events: none;
+}
+
+/* Right Panel (Inspector / Properties) */
+.editor-inspector {
+  width: 300px;
+  min-width: 260px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inspector-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Playback Control Bar */
+.stage-playback-bar {
+  height: 44px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.playback-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.transport-btn:hover {
+  background: var(--bg-panel);
+  color: #fff;
+}
+
+.transport-btn.play-btn {
+  background: var(--accent);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.transport-btn.play-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.timecode-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--bg-input);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timecode-current {
+  color: var(--accent);
+}
+
+/* Bottom Multi-track Timeline */
+.editor-timeline {
+  height: 240px;
+  min-height: 180px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.timeline-toolbar {
+  height: 38px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.timeline-tools-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-tool-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.timeline-tool-btn:hover {
+  background: var(--bg-panel-hover);
+  color: #fff;
+}
+
+.timeline-scroll-area {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: var(--timeline-track-bg);
+}
+
+.timeline-ruler {
+  height: 26px;
+  background: var(--timeline-ruler-bg);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+
+.timeline-tracks-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 1000px;
+}
+
+.timeline-track-row {
+  height: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  position: relative;
+}
+
+.track-header-cell {
+  width: 160px;
+  min-width: 160px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.track-lane {
+  flex: 1;
+  position: relative;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.timeline-clip-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  border: 1px solid #3b82f6;
+  color: white;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: move;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timeline-clip-block.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+}
+
+.trim-handle-left, .trim-handle-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: ew-resize;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.timeline-clip-block:hover .trim-handle-left,
+.timeline-clip-block:hover .trim-handle-right,
+.timeline-clip-block.selected .trim-handle-left,
+.timeline-clip-block.selected .trim-handle-right {
+  opacity: 1;
+}
+
+.trim-handle-left:hover, .trim-handle-right:hover {
+  background: #ffffff;
+}
+
+.trim-handle-left {
+  left: 0;
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+}
+
+.trim-handle-right {
+  right: 0;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+
+.timeline-clip-audio {
+  background: linear-gradient(180deg, #059669, #047857) !important;
+  border-color: #10b981 !important;
+}
+
+.timeline-clip-audio.selected {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8) !important;
+}
+
+/* Playhead Scrubber */
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--playhead-color);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.playhead-scrubber-handle {
+  width: 12px;
+  height: 14px;
+  background: var(--playhead-color);
+  position: absolute;
+  top: 0;
+  left: -5px;
+  clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
+}
+
+/* XP Simulation Specific Styles (Strictly inside the Canvas) */
+.xp-window-chrome {
+  background: #ECE9D8;
+  border: 3px solid #0055EA;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  box-shadow: 2px 3px 15px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.xp-titlebar {
+  height: 28px;
+  background: linear-gradient(180deg, #0058EE 0%, #3593FF 10%, #288EFF 25%, #0055EA 60%, #0045D0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 8px;
+  color: #fff;
+  font-family: 'Tahoma', sans-serif;
+  font-weight: bold;
+  font-size: 12px;
+  text-shadow: 1px 1px 1px #0f3b82;
+}
+
+.xp-titlebar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.xp-window-btn {
+  width: 21px;
+  height: 21px;
+  border-radius: 3px;
+  border: 1px solid #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Marlett', sans-serif;
+  font-size: 10px;
+  color: white;
+  cursor: pointer;
+}
+
+.xp-btn-min, .xp-btn-max {
+  background: linear-gradient(180deg, #3884ea 0%, #1e52bc 100%);
+}
+
+.xp-btn-close {
+  background: linear-gradient(180deg, #e06c52 0%, #c93b1d 100%);
+}
+
+.xp-window-content {
+  flex: 1;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Authentic XP Taskbar (Simulated visual asset inside video canvas) */
+.xp-taskbar-asset {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(180deg, #1f2f86 0%, #316ac5 3%, #245ddb 6%, #1941a5 10%, #1941a5 90%, #143586 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 50;
+  border-top: 1px solid #3c7bf2;
+}
+
+.xp-start-button {
+  height: 100%;
+  padding: 0 16px 0 10px;
+  background: linear-gradient(180deg, #3c8d3c 0%, #429f42 10%, #3b923b 30%, #2f7a2f 90%, #1e5a1e 100%);
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-family: 'Franklin Gothic Medium', 'Tahoma', sans-serif;
+  font-style: italic;
+  font-weight: bold;
+  font-size: 14px;
+  text-shadow: 1px 1px 1px #0f3b0f;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.3);
+}
+
+.xp-tray {
+  height: 100%;
+  background: linear-gradient(180deg, #092c74 0%, #0d42a6 100%);
+  border-left: 1px solid #1646a8;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-family: 'Tahoma', sans-serif;
+  font-size: 11px;
+}
+
+/* Inactive XP Titlebar */
+.xp-titlebar.inactive {
+  background: linear-gradient(180deg, #7697C6 0%, #8FAAD4 15%, #7A9BC8 50%, #688BB9 100%);
+  text-shadow: 1px 1px 1px #466795;
+}
+
+.xp-titlebar.inactive .xp-window-btn {
+  opacity: 0.85;
+}
+
+/* Window Menu Bar */
+.xp-menubar {
+  height: 22px;
+  background: #ECE9D8;
+  border-bottom: 1px solid #D5D2C2;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-family: 'Tahoma', sans-serif;
+  font-size: 11px;
+  color: #000;
+  gap: 2px;
+}
+
+.xp-menu-item {
+  padding: 2px 6px;
+  cursor: default;
+  border-radius: 2px;
+}
+
+.xp-menu-item:hover {
+  background: #316AC5;
+  color: #fff;
+}
+
+/* Window Status Bar */
+.xp-statusbar {
+  height: 20px;
+  background: #ECE9D8;
+  border-top: 1px solid #D5D2C2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  font-family: 'Tahoma', sans-serif;
+  font-size: 10px;
+  color: #444;
+}
+
+.xp-statusbar-panel {
+  border-left: 1px solid #FFFFFF;
+  border-top: 1px solid #808080;
+  border-right: 1px solid #FFFFFF;
+  border-bottom: 1px solid #808080;
+  padding: 1px 6px;
+}
+
+.xp-resize-grip {
+  width: 12px;
+  height: 12px;
+  background-image: radial-gradient(#808080 1px, transparent 1px);
+  background-size: 3px 3px;
+  background-position: right bottom;
+  background-repeat: no-repeat;
+  opacity: 0.7;
+}
+
+/* Windows Picture and Fax Viewer */
+.xp-image-viewer-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #ECE9D8;
+}
+
+.xp-image-viewer-viewport {
+  flex: 1;
+  background: #7B92B2;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 2px inset #ECE9D8;
+  margin: 3px;
+}
+
+.xp-image-viewer-img {
+  max-width: 95%;
+  max-height: 95%;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.xp-image-viewer-toolbar {
+  height: 38px;
+  background: linear-gradient(180deg, #F0EFE6 0%, #E3E0CE 50%, #D8D4BF 100%);
+  border-top: 1px solid #D5D2C2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.xp-viewer-btn {
+  width: 28px;
+  height: 28px;
+  background: #ECE9D8;
+  border: 1px solid #ECE9D8;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: all 0.1s;
+}
+
+.xp-viewer-btn:hover {
+  border-color: #316AC5;
+  background: linear-gradient(180deg, #E6EFFF 0%, #C8DCFF 100%);
+  box-shadow: inset 0 0 2px rgba(49, 106, 197, 0.4);
+}
+
+.xp-viewer-btn:active {
+  border-color: #1F4A8B;
+  background: linear-gradient(180deg, #A8C7FF 0%, #C4DAFF 100%);
+}
+
+.xp-viewer-separator {
+  width: 1px;
+  height: 20px;
+  background: #C4C0AB;
+  margin: 0 2px;
+}
+
+/* Desktop Icons Inside Canvas Wallpaper */
+.xp-desktop-icon {
+  position: absolute;
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  user-select: none;
+}
+
+.xp-desktop-icon:hover {
+  background: rgba(49, 106, 197, 0.25);
+}
+
+.xp-desktop-icon.selected {
+  background: rgba(49, 106, 197, 0.45);
+  outline: 1px dotted #fff;
+}
+
+.xp-desktop-icon-img {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5));
+}
+
+.xp-desktop-icon-label {
+  font-family: 'Tahoma', sans-serif;
+  font-size: 11px;
+  color: #ffffff;
+  text-shadow: 1px 1px 2px #000, 0 0 2px #000;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* Transform Box & Drag/Resize Handles */
+.transform-bounding-box {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  pointer-events: none;
+}
+
+.transform-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #ffffff;
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.transform-handle:hover {
+  background: var(--accent);
+  transform: scale(1.2);
+}
+
+.handle-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.handle-n  { top: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.handle-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.handle-e  { top: calc(50% - 4.5px); right: -5px; cursor: ew-resize; }
+.handle-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.handle-s  { bottom: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.handle-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.handle-w  { top: calc(50% - 4.5px); left: -5px; cursor: ew-resize; }
+
+.transform-badge {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: rgba(13, 15, 18, 0.9);
+  color: var(--accent);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes cursorRippleAnim {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes typewriterBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+
