@@ -536,13 +536,36 @@ export const App: React.FC = () => {
     const firstHalfDuration = splitTime - target.startTime;
     const secondHalfDuration = target.duration - firstHalfDuration;
 
-    const updatedOriginal = { ...target, duration: firstHalfDuration };
+    // Partition keyframes at the split point so each half keeps only its own
+    // animation, with second-half times re-based to the new clip origin.
+    const firstKfs = (target.keyframes || []).filter((k) => k.time < firstHalfDuration - 0.001);
+    const secondKfs = (target.keyframes || [])
+      .filter((k) => k.time >= firstHalfDuration - 0.001)
+      .map((k) => ({ ...k, time: Number((k.time - firstHalfDuration).toFixed(3)) }));
+    let firstDkf: any = undefined;
+    let secondDkf: any = undefined;
+    if ((target as any).dialogueKeyframes) {
+      const dKfs = (target as any).dialogueKeyframes as any[];
+      firstDkf = dKfs.filter((k) => k.time < firstHalfDuration - 0.001);
+      secondDkf = dKfs
+        .filter((k) => k.time >= firstHalfDuration - 0.001)
+        .map((k) => ({ ...k, time: Number((k.time - firstHalfDuration).toFixed(3)) }));
+    }
+
+    const updatedOriginal: CanvasElement = {
+      ...target,
+      duration: firstHalfDuration,
+      keyframes: firstKfs,
+      ...(firstDkf !== undefined ? { dialogueKeyframes: firstDkf } : {}),
+    } as CanvasElement;
     const secondPart: CanvasElement = {
       ...target,
       id: `${target.id}-split-${Date.now()}`,
       startTime: splitTime,
       duration: secondHalfDuration,
-    };
+      keyframes: secondKfs,
+      ...(secondDkf !== undefined ? { dialogueKeyframes: secondDkf } : {}),
+    } as CanvasElement;
 
     setElements((prev) => [
       ...prev.map((el) => (el.id === id ? updatedOriginal : el)),
@@ -702,6 +725,9 @@ export const App: React.FC = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A keyframe deletion in the Timeline calls preventDefault() — never
+      // escalate that into deleting the whole clip.
+      if (e.defaultPrevented) return;
       const inInput = isEditableTarget(e.target);
       const isCtrl = e.ctrlKey || e.metaKey;
 

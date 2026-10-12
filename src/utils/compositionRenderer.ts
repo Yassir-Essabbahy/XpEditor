@@ -887,7 +887,7 @@ function drawAssistant(
   // Draw transparent assistant character
   const evalDialogue = evaluateAssistantDialogue(el, time);
   const pose = evalDialogue.pose;
-  const isAnimated = el.isAnimated ?? (pose === 'idle');
+  const isAnimated = el.isAnimated ?? false;
   const animationSpeed = el.animationSpeed || 12;
 
   ctx.save();

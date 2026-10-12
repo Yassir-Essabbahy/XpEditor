@@ -1251,7 +1251,9 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                       onInteractionStart?.();
                       let updated = addOrUpdateKeyframe(selectedElement, 'x', relTime, 3, 'ease-in-out');
                       updated = addOrUpdateKeyframe(updated, 'y', relTime, 96, 'ease-in-out');
-                      onUpdateElement(selectedElement.id, { x: 3, y: 96, keyframes: updated.keyframes });
+                      const firstX = updated.keyframes?.filter((k) => k.property === 'x').sort((a, b) => a.time - b.time)[0]?.value ?? 3;
+                      const firstY = updated.keyframes?.filter((k) => k.property === 'y').sort((a, b) => a.time - b.time)[0]?.value ?? 96;
+                      onUpdateElement(selectedElement.id, { x: firstX, y: firstY, keyframes: updated.keyframes });
                     }}
                     title="Glide pointer to Start Menu at current playhead"
                   >
@@ -1265,7 +1267,9 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                       onInteractionStart?.();
                       let updated = addOrUpdateKeyframe(selectedElement, 'x', relTime, 75, 'ease-in-out');
                       updated = addOrUpdateKeyframe(updated, 'y', relTime, 25, 'ease-in-out');
-                      onUpdateElement(selectedElement.id, { x: 75, y: 25, keyframes: updated.keyframes });
+                      const firstX = updated.keyframes?.filter((k) => k.property === 'x').sort((a, b) => a.time - b.time)[0]?.value ?? 75;
+                      const firstY = updated.keyframes?.filter((k) => k.property === 'y').sort((a, b) => a.time - b.time)[0]?.value ?? 25;
+                      onUpdateElement(selectedElement.id, { x: firstX, y: firstY, keyframes: updated.keyframes });
                     }}
                     title="Glide pointer to Close Button at current playhead"
                   >
@@ -1279,7 +1283,9 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                       onInteractionStart?.();
                       let updated = addOrUpdateKeyframe(selectedElement, 'x', relTime, 50, 'ease-in-out');
                       updated = addOrUpdateKeyframe(updated, 'y', relTime, 50, 'ease-in-out');
-                      onUpdateElement(selectedElement.id, { x: 50, y: 50, keyframes: updated.keyframes });
+                      const firstX = updated.keyframes?.filter((k) => k.property === 'x').sort((a, b) => a.time - b.time)[0]?.value ?? 50;
+                      const firstY = updated.keyframes?.filter((k) => k.property === 'y').sort((a, b) => a.time - b.time)[0]?.value ?? 50;
+                      onUpdateElement(selectedElement.id, { x: firstX, y: firstY, keyframes: updated.keyframes });
                     }}
                     title="Glide pointer to Screen Center at current playhead"
                   >
@@ -1326,7 +1332,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Base Volume ({Math.round(((anim.volume !== undefined ? anim.volume : audio.volume) ?? 1) * 100)}%)</span>
-                {renderKeyframeButtons('volume', audio.volume ?? 1)}
+                {renderKeyframeButtons('volume', (anim.volume !== undefined ? anim.volume : audio.volume) ?? 1)}
               </div>
               <input 
                 type="range" 
@@ -1442,9 +1448,9 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               </select>
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Audio Volume</span>
-                <span style={{ fontSize: '11px', color: '#fff' }}>{Math.round((video.volume ?? 1) * 100)}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Audio Volume ({Math.round(((anim.volume !== undefined ? anim.volume : video.volume) ?? 1) * 100)}%)</span>
+                {renderKeyframeButtons('volume', (anim.volume !== undefined ? anim.volume : video.volume) ?? 1)}
               </div>
               <input 
                 type="range" 
@@ -1452,8 +1458,8 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                 max="1" 
                 step="0.05"
                 style={{ width: '100%', accentColor: '#f59e0b' }}
-                value={video.volume ?? 1}
-                onChange={(e) => onUpdateElement(selectedElement.id, { volume: Number(e.target.value) } as any)}
+                value={(anim.volume !== undefined ? anim.volume : video.volume) ?? 1}
+                onChange={(e) => handleNumericPropertyChange('volume', Number(e.target.value))}
               />
             </div>
           </div>

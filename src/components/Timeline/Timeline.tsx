@@ -189,11 +189,39 @@ export const Timeline: React.FC<TimelineProps> = ({
           const maxStart = trimmingClip.origStart + trimmingClip.origDuration - 0.2;
           proposedStart = Math.max(0, Math.min(maxStart, proposedStart));
           const newDuration = (trimmingClip.origStart + trimmingClip.origDuration) - proposedStart;
-
-          onUpdateElement(trimmingClip.id, {
+          // Shift element-relative keyframes so animation stays glued to project time.
+          const shift = proposedStart - trimmingClip.origStart;
+          const targetEl = elements.find((el) => el.id === trimmingClip.id);
+          const updates: any = {
             startTime: Number(proposedStart.toFixed(2)),
             duration: Number(newDuration.toFixed(2)),
-          });
+          };
+          if (targetEl && targetEl.keyframes && targetEl.keyframes.length > 0 && Math.abs(shift) > 0.0001) {
+            updates.keyframes = targetEl.keyframes
+              .map((k) => ({ ...k, time: Number((k.time - shift).toFixed(3)) }))
+              .filter((k) => k.time >= -0.001 && k.time <= newDuration + 0.001)
+              .map((k) => ({ ...k, time: Math.max(0, Math.min(newDuration, k.time)) }));
+            if (targetEl.type === 'assistant') {
+              const dKfs = (targetEl as AssistantElement).dialogueKeyframes || [];
+              if (dKfs.length > 0) {
+                updates.dialogueKeyframes = dKfs
+                  .map((dk) => ({ ...dk, time: Number((dk.time - shift).toFixed(3)) }))
+                  .filter((dk) => dk.time >= -0.001 && dk.time <= newDuration + 0.001)
+                  .map((dk) => ({ ...dk, time: Math.max(0, Math.min(newDuration, dk.time)) }));
+              }
+            }
+          } else if (targetEl && targetEl.type === 'assistant') {
+            // Even without transform kfs, lone dialogue kfs must still shift on left-trim.
+            const dKfs = (targetEl as AssistantElement).dialogueKeyframes || [];
+            if (dKfs.length > 0 && Math.abs(shift) > 0.0001) {
+              updates.dialogueKeyframes = dKfs
+                .map((dk) => ({ ...dk, time: Number((dk.time - shift).toFixed(3)) }))
+                .filter((dk) => dk.time >= -0.001 && dk.time <= newDuration + 0.001)
+                .map((dk) => ({ ...dk, time: Math.max(0, Math.min(newDuration, dk.time)) }));
+            }
+          }
+
+          onUpdateElement(trimmingClip.id, updates);
         } else if (trimmingClip.edge === 'right') {
           let proposedDuration = trimmingClip.origDuration + deltaSec;
           let proposedEnd = trimmingClip.origStart + proposedDuration;
@@ -204,9 +232,27 @@ export const Timeline: React.FC<TimelineProps> = ({
           }
           proposedDuration = proposedEnd - trimmingClip.origStart;
 
-          onUpdateElement(trimmingClip.id, {
+          // Clamp/trim keyframes that now fall beyond the shortened duration.
+          const targetEl = elements.find((el) => el.id === trimmingClip.id);
+          const updates: any = {
             duration: Number(proposedDuration.toFixed(2)),
-          });
+          };
+          if (targetEl && targetEl.keyframes && targetEl.keyframes.length > 0) {
+            updates.keyframes = targetEl.keyframes.filter((k) => k.time <= proposedDuration + 0.001);
+            if (targetEl.type === 'assistant') {
+              const dKfs = (targetEl as AssistantElement).dialogueKeyframes || [];
+              if (dKfs.length > 0) {
+                updates.dialogueKeyframes = dKfs.filter((dk) => dk.time <= proposedDuration + 0.001);
+              }
+            }
+          } else if (targetEl && targetEl.type === 'assistant') {
+            const dKfs = (targetEl as AssistantElement).dialogueKeyframes || [];
+            if (dKfs.length > 0) {
+              updates.dialogueKeyframes = dKfs.filter((dk) => dk.time <= proposedDuration + 0.001);
+            }
+          }
+
+          onUpdateElement(trimmingClip.id, updates);
         }
       }
 
@@ -336,7 +382,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const getElementsForTrack = (trackId: string) => {
     return elements.filter((el) => {
       if (trackId === 'track-4') return el.type === 'audio';
-      if (trackId === 'track-3') return el.type === 'cursor' || el.type === 'text';
+      if (trackId === 'track-3') return el.type === 'cursor' || el.type === 'text' || el.type === 'assistant';
       if (trackId === 'track-2') return el.type === 'xp-window' || el.type === 'image-viewer' || el.type === 'dialog' || el.type === 'video';
       return el.type === 'wallpaper' || el.type === 'taskbar' || el.type === 'desktop-icon';
     });
@@ -346,6 +392,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     switch (type) {
       case 'audio': return <Volume2 size={12} />;
       case 'cursor': return <MousePointer size={12} />;
+      case 'assistant': return <MousePointer size={12} />;
       case 'wallpaper': return <ImageIcon size={12} />;
       case 'xp-window': 
       case 'image-viewer':
@@ -429,6 +476,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                   onInteractionStart?.();
                   const anim = getAnimatedElementProps(selectedElement, currentTime);
                   const relTime = Math.max(0, Math.min(selectedElement.duration, currentTime - selectedElement.startTime));
+                  // Audio clips animate volume (no visual transform); all other types animate transform.
+                  if (selectedElement.type === 'audio') {
+                    const animVol = anim.volume !== undefined ? anim.volume : ((selectedElement as any).volume ?? 1);
+                    const updated = addOrUpdateKeyframe(selectedElement, 'volume', relTime, animVol);
+                    onUpdateElement(selectedElement.id, { keyframes: updated.keyframes });
+                    return;
+                  }
                   let updated = addOrUpdateKeyframe(selectedElement, 'x', relTime, anim.x);
                   updated = addOrUpdateKeyframe(updated, 'y', relTime, anim.y);
                   updated = addOrUpdateKeyframe(updated, 'width', relTime, anim.width);
